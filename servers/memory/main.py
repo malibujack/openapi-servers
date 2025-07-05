@@ -5,10 +5,11 @@ from typing import List, Optional
 from pathlib import Path
 import json
 import os
+import hashlib
 
 app = FastAPI(
     title="User-Specific Knowledge Graph Server",
-    version="1.1.0",
+    version="1.3.0",
     description="A structured knowledge graph memory system that supports user-specific entity and relation storage, observation tracking, and manipulation.",
 )
 
@@ -26,10 +27,10 @@ app.add_middleware(
 DATA_DIR = Path(os.getenv("MEMORY_DATA_PATH", "/app/data"))
 DATA_DIR.mkdir(exist_ok=True)
 
-def get_memory_file_path(user_id: Optional[str] = None) -> Path:
-    if user_id:
-        return DATA_DIR / f"memory_{user_id}.json"
-    return DATA_DIR / "memory_global.json"
+def get_memory_file_path(user_id: str) -> Path:
+    # Use a hash of the user_id for the filename to be safe
+    hashed_user_id = hashlib.sha256(user_id.encode()).hexdigest()
+    return DATA_DIR / f"memory_{hashed_user_id}.json"
 
 # ----- Data Models -----
 class Entity(BaseModel):
@@ -78,7 +79,7 @@ def save_graph(graph: KnowledgeGraph, file_path: Path):
 
 # ----- Request Models -----
 class UserSpecificRequest(BaseModel):
-    user_id: Optional[str] = Field(None, description="Optional user ID for user-specific memory.")
+    user_id: str = Field(..., description="User ID for user-specific memory.")
 
 class CreateEntitiesRequest(UserSpecificRequest):
     entities: List[Entity] = Field(..., description="List of entities to create")
@@ -178,7 +179,7 @@ def delete_relations(req: DeleteRelationsRequest):
     return {"message": "Relations deleted successfully"}
 
 @app.get("/read_graph", response_model=KnowledgeGraph, summary="Read knowledge graph for a user")
-def read_graph(user_id: Optional[str] = None):
+def read_graph(user_id: str):
     file_path = get_memory_file_path(user_id)
     return read_graph_file(file_path)
 
